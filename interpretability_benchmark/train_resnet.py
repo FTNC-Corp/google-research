@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2018 The Google Research Authors.
+# Copyright 2019 The Google Research Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -297,7 +297,6 @@ def main(argv):
                            str(params['base_learning_rate']),
                            str(params['weight_decay']), is_squared, info_keep)
 
-  # configures train directories based upon hyperparameters set in xmanager.py.
   if FLAGS.transformation in ['modified_image', 'raw_saliency_map']:
     model_dir = os.path.join(model_dir, FLAGS.saliency_method)
 

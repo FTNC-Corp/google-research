@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2018 The Google Research Authors.
+# Copyright 2019 The Google Research Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -197,7 +197,7 @@ class DeepQNetwork(object):
     # the asymptotic relative efficiency of the l1 loss estimator is better
     # for heavy-tailed distributions.
     errors = tf.where(
-        tf.abs(td_error) < 1.0, tf.square(td_error),
+        tf.abs(td_error) < 1.0, tf.square(td_error) * 0.5,
         1.0 * (tf.abs(td_error) - 0.5))
     weighted_error = tf.reduce_mean(error_weight * errors)
     return q_values, td_error, weighted_error, q_fn_vars, q_tp1_vars

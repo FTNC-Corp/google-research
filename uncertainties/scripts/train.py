@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2018 The Google Research Authors.
+# Copyright 2019 The Google Research Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -56,8 +56,6 @@ flags.DEFINE_multi_string('gin_bindings', [],
 
 def main(unused_argv):
 
-  # Enable passing of configurable references from xmanager.
-  # Xmanager passes them as strings while gin wants them unquoted.
   FLAGS.gin_bindings = [
       x if "@" not in x else x.replace("\"", "") for x in FLAGS.gin_bindings  # pylint: disable=g-inconsistent-quotes
   ]
