@@ -31,6 +31,7 @@ from the margin distribution generalization dataset.
   model_config.load_parameters(model_path, sess)
 """
 
+import json
 import os
 
 import tensorflow as tf
@@ -88,6 +89,7 @@ class ModelConfig(object):
     copy: Index of the copy.
     num_class: Number of classes in the dataset.
     data_format: What kind of data the model expects (e.g. channel first/last).
+    root_dir: Optional root directory.
   """
 
   def __init__(
@@ -101,6 +103,7 @@ class ModelConfig(object):
       l2_decay_factor=0.0,
       normalization='batch',
       learning_rate=0.01,
+      root_dir=None,
       copy=1):
 
     assert model_type == 'nin' or model_type == 'resnet'
@@ -122,8 +125,44 @@ class ModelConfig(object):
     self.copy = copy
     self.num_class = 10 if dataset == 'cifar10' else 100
     self.data_format = 'HWC' if model_type == 'nin' else 'CHW'
+    self.root_dir = root_dir
 
-  def get_model_dir_name(self, root_dir):
+  def _get_stats(self, stats_file_name, stats_name):
+    if not self.root_dir:
+      raise ValueError('This model config does not have a root directory.')
+    stats_path = os.path.join(self.get_model_dir_name(), stats_file_name)
+    with tf.io.gfile.Gfile(stats_path, 'r') as f:
+      return json.loads(f)[stats_name]
+
+  def training_stats(self, stats_name='Accuracy'):
+    """Get the specified training statistics of the model.
+
+    Args:
+      stats_name: Name of the stats to look up ('Accuracy' or 'CrossEntropy').
+
+    Returns:
+      The train stats specified by stats_name
+
+    Raises:
+      ValueError: the model config's root_dir is None
+    """
+    return self._get_stats('train.json', stats_name)
+
+  def test_stats(self, stats_name='Accuracy'):
+    """Get the specified test statistics of the model.
+
+    Args:
+      stats_name: Name of the stats to look up ('Accuracy' or 'CrossEntropy').
+
+    Returns:
+      The test stats specified by stats_name
+
+    Raises:
+      ValueError: the model config's root_dir is None
+    """
+    return self._get_stats('eval.json', stats_name)
+
+  def get_model_dir_name(self, root_dir=None):
     """Get the name of the trained model's directory.
 
     Generates the name of the directory that contain a trained model
@@ -131,7 +170,7 @@ class ModelConfig(object):
     generaly indicative of the hyperparameter settings of the model.
 
     Args:
-      root_dir: Root directory where experiment directory is located.
+      root_dir: Optional root directory where experiment directory is located.
 
     Returns:
       A string that contains the checkpoint containing weights and
@@ -140,6 +179,10 @@ class ModelConfig(object):
     Raises:
       ValueError: The model type is not in the dataset
     """
+    if not root_dir:
+      assert self.root_dir
+      root_dir = self.root_dir
+
     if self.model_type == 'nin':
       data_dir = 'NIN_'
       data_dir += self.dataset
@@ -171,7 +214,10 @@ class ModelConfig(object):
       model_dir = os.path.join(model_parent_dir, '_'.join(model_path))
     else:
       raise ValueError('model type {} is not available'.format(self.model_type))
-    return os.path.join(model_dir, CKPT_NAME)
+    return model_dir
+
+  def get_checkpoint_path(self, root_dir=None):
+    return os.path.join(self.get_model_dir_name(root_dir), CKPT_NAME)
 
   def get_model_fn(self):
     """Get a model function of the model specified by a model configuration.

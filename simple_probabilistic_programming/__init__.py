@@ -28,31 +28,17 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from tensorflow_probability import distributions
-from simple_probabilistic_programming import generated_random_variables
-from simple_probabilistic_programming.generated_random_variables import *  # pylint: disable=wildcard-import
-from simple_probabilistic_programming.generated_random_variables import make_random_variable
-from simple_probabilistic_programming.program_transformations import make_log_joint_fn
-from simple_probabilistic_programming.random_variable import RandomVariable
-from simple_probabilistic_programming.trace import get_next_tracer
-from simple_probabilistic_programming.trace import tape
-from simple_probabilistic_programming.trace import trace
-from simple_probabilistic_programming.trace import traceable
-
-from tensorflow.python.util.all_util import remove_undocumented
-
+from simple_probabilistic_programming import numpy
+from simple_probabilistic_programming import tensorflow
+from simple_probabilistic_programming.tensorflow import *  # pylint: disable=wildcard-import
+from tensorflow.python.util.all_util import remove_undocumented  # pylint: disable=g-direct-tensorflow-import
 
 _allowed_symbols = [
-    "RandomVariable",
-    "get_next_tracer",
-    "make_log_joint_fn",
-    "make_random_variable",
-    "tape",
-    "trace",
-    "traceable",
+    "numpy",
+    "tensorflow",
 ]
-for name in dir(generated_random_variables):
-  if name in sorted(dir(distributions)):
-    _allowed_symbols.append(name)
+# By default, `import edward2 as ed` uses the TensorFlow backend's namespace.
+for name in dir(tensorflow):
+  _allowed_symbols.append(name)
 
 remove_undocumented(__name__, _allowed_symbols)

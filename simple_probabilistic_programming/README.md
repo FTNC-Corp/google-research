@@ -4,16 +4,18 @@ This directory contains reference code for the NIPS 2018 paper,
 ["Simple, Distributed, and Accelerated Probabilistic Programming"](https://arxiv.org/abs/1811.02091).
 It's organized as follows:
 
+* [`examples/`](https://github.com/google-research/google-research/blob/master/simple_probabilistic_programming/examples):
+  Examples, including an implementation of the No-U-Turn Sampler.
+* [`notebooks/`](https://github.com/google-research/google-research/blob/master/simple_probabilistic_programming/notebooks):
+  Jupyter notebooks, including a companion notebook for the paper's examples.
 * [`*.py`](https://github.com/google-research/google-research/blob/master/simple_probabilistic_programming/):
-  Edward2, an implementation of the idea.
-* [`Companion.ipynb`](https://github.com/google-research/google-research/blob/master/simple_probabilistic_programming/Companion.ipynb):
-  Jupyter notebook which expands on the paper's code snippets and examples.
-* [`no_u_turn_sampler/`](https://github.com/google-research/google-research/blob/master/simple_probabilistic_programming/no_u_turn_sampler):
-  Example implementation of the No-U-Turn Sampler.
+  Edward2, in its core implementation. It features two backends:
+  [`numpy/`](https://github.com/google-research/google-research/blob/master/simple_probabilistic_programming/numpy)
+  and
+  [`tensorflow/`](https://github.com/google-research/google-research/blob/master/simple_probabilistic_programming/tensorflow).
 
-The implementation, Edward2, is a probabilistic programming language in
-TensorFlow and Python. It
-extends the TensorFlow ecosystem so that one can declare models as
+The implementation, Edward2, is a probabilistic programming language in Python.
+It extends the NumPy or TensorFlow ecosystem so that one can declare models as
 probabilistic programs and manipulate a model's computation for flexible
 training, latent variable inference, and predictions.
 
@@ -28,11 +30,14 @@ To install the latest stable version, run
 pip install edward2
 ```
 
-Installing `edward2` does not automatically install or update
-TensorFlow. We recommend installing it via `pip install tensorflow` or `pip
-install tensorflow-gpu`. See TensorFlow’s
+Edward2 supports two backends: TensorFlow (the default) and
+NumPy ([see below to activate](#using-the-numpy-backend)). Installing
+`edward2` does not automatically install or update TensorFlow or NumPy. We
+recommend installing TensorFlow via `pip install edward2[tensorflow]` or
+`pip install edward2[tensorflow_gpu]`. See TensorFlow’s
 [installation instructions for details](https://www.tensorflow.org/install/).
-You may need to use TensorFlow's nightly package (`tf-nightly`).
+You may need to use TensorFlow's nightly package (`tf-nightly`). Alternatively,
+install NumPy via `pip install edward2[numpy]`.
 
 ## 1. Models as Probabilistic Programs
 
@@ -197,7 +202,7 @@ takes just `coeffs` and `intercept` as arguments and pins the input `features`
 and output rv `outcomes` to its known values.
 
 ```python
-from simple_probabilistic_programming import no_u_turn_sampler
+from simple_probabilistic_programming.examples import no_u_turn_sampler
 
 tf.enable_eager_execution()
 
@@ -239,6 +244,26 @@ for _ in range(1000):
 The returned `coeffs_samples` and `intercept_samples` contain 1,000 posterior
 samples for `coeffs` and `intercept` respectively. They may be used, for
 example, to evaluate the model's posterior predictive on new data.
+
+## Using the NumPy backend
+
+Using alternative backends is as simple as the following:
+
+```python
+import edward2.numpy as ed
+```
+
+In the NumPy backend, Edward2 wraps SciPy distributions. For example, here's
+linear regression.
+
+```python
+def linear_regression(features, prior_precision):
+  beta = ed.norm.rvs(loc=0.,
+                     scale=1. / np.sqrt(prior_precision),
+                     size=features.shape[1])
+  y = ed.norm.rvs(loc=np.dot(features, beta), scale=1., size=1)
+  return y
+```
 
 ## References
 
