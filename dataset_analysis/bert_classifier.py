@@ -39,6 +39,7 @@ from dataset_analysis.bert import tokenization
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+from tensorflow.contrib import data as contrib_data
 
 flags = tf.flags
 
@@ -96,8 +97,7 @@ flags.DEFINE_bool("do_train", True,
 flags.DEFINE_bool(
     "calculate_metrics", True,
     "Whether to calculate performance metrics on the test set "
-    "(FLAGS.test_fname must have labels)."
-)
+    "(FLAGS.test_fname must have labels).")
 
 flags.DEFINE_bool(
     "do_predict", True,
@@ -124,8 +124,7 @@ flags.DEFINE_float("pred_cutoff", 0.05,
 flags.DEFINE_float(
     "eval_prob_threshold", 0.1,
     "Cutoff probability determine which labels are 1 vs 0, when calculating "
-    "certain evaluation metrics."
-)
+    "certain evaluation metrics.")
 flags.DEFINE_string(
     "eval_thresholds", "0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,0.95,0.99",
     "Thresholds for evaluating precision, recall and F-1 scores.")
@@ -379,7 +378,7 @@ def file_based_input_fn_builder(input_file, seq_length, is_training,
       d = d.shuffle(buffer_size=100)
 
     d = d.apply(
-        tf.contrib.data.map_and_batch(
+        contrib_data.map_and_batch(
             lambda record: _decode_record(record, name_to_features),
             batch_size=batch_size,
             drop_remainder=drop_remainder))

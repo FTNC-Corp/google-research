@@ -17,6 +17,7 @@
 """
 from __future__ import print_function
 import tensorflow as tf
+from tensorflow.contrib import layers as contrib_layers
 
 configurations = {
     'VGG11': [
@@ -54,9 +55,9 @@ class VggNet(object):
     self.vggname = vggname
     self.num_classes = num_classes
 
-    self.regularizer = tf.contrib.layers.l2_regularizer(scale=wd)
-    self.initializer = tf.contrib.layers.xavier_initializer()
-    self.variance_initializer = tf.contrib.layers.variance_scaling_initializer(
+    self.regularizer = contrib_layers.l2_regularizer(scale=wd)
+    self.initializer = contrib_layers.xavier_initializer()
+    self.variance_initializer = contrib_layers.variance_scaling_initializer(
         factor=0.1,
         mode='FAN_IN',
         uniform=False,
@@ -140,16 +141,13 @@ class VggNet(object):
             strides=2,
             padding='same',
             name='pool_' + str(self.pool_num))
-        print(inputs.get_shape().as_list())
         self.pool_num += 1
       elif param == 'D':
         inputs = tf.layers.dropout(
             inputs, rate=self.drop_rate, training=training)
       else:
         inputs = self.conv2d(inputs, param, training)
-        print(inputs.get_shape().as_list())
     inputs = tf.layers.average_pooling2d(inputs, pool_size=1, strides=1)
-    print(inputs.get_shape().as_list())
     return inputs
 
 
@@ -175,4 +173,3 @@ def vgg19(keep_prob, wd, neck, feature_dim):
   net = VggNet(vggname='VGG19', keep_prob=keep_prob, wd=wd, neck=neck,
                feature_dim=feature_dim)
   return net
-

@@ -82,7 +82,7 @@ class OpsTest(parameterized.TestCase, tf.test.TestCase):
     eps = 1e-3
     sinkhorn_threshold = 1e-3
     values = ops.softsort(x, direction='ASCENDING',
-                          epsilon=eps, sinkhorn_threshold=sinkhorn_threshold)
+                          epsilon=eps, threshold=sinkhorn_threshold)
     self.assertEqual(values.shape, x.shape)
     self.assertAllGreater(np.diff(values), 0.0)
 
@@ -94,7 +94,7 @@ class OpsTest(parameterized.TestCase, tf.test.TestCase):
     # Test descending sort.
     direction = 'DESCENDING'
     values = ops.softsort(x, direction=direction,
-                          epsilon=eps, sinkhorn_threshold=sinkhorn_threshold)
+                          epsilon=eps, threshold=sinkhorn_threshold)
     self.assertEqual(values.shape, x.shape)
     self.assertAllLess(np.diff(values), 0.0)
     self.assertAllClose(
@@ -132,7 +132,7 @@ class OpsTest(parameterized.TestCase, tf.test.TestCase):
     for zero_based in [False, True]:
       ranks = ops.softranks(
           x, direction=direction, axis=axis, zero_based=zero_based,
-          epsilon=eps, sinkhorn_threshold=sinkhorn_threshold)
+          epsilon=eps, threshold=sinkhorn_threshold)
       targets = target + 1 if not zero_based else target
       self.assertAllClose(ranks, targets, tolerance, tolerance)
 
@@ -177,6 +177,15 @@ class OpsTest(parameterized.TestCase, tf.test.TestCase):
     x = tf.random.uniform((3, 10))
     with self.assertRaises(tf.errors.InvalidArgumentError):
       ops.softquantiles(x, [q1, q2], quantile_width=width, axis=-1)
+
+  def test_soft_quantile_normalization(self):
+    x = tf.constant([1.2, 1.3, 1.5, -4.0, 1.8, 2.4, -1.0])
+    target = tf.cumsum(tf.ones(x.shape[0]))
+    xn = ops.soft_quantile_normalization(x, target)
+    # Make sure that the order of x and xn are identical
+    self.assertAllEqual(tf.argsort(x), tf.argsort(xn))
+    # Make sure that the values of xn and target are close.
+    self.assertAllClose(tf.sort(target), tf.sort(xn), atol=1e-1)
 
 
 if __name__ == '__main__':

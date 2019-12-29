@@ -79,6 +79,7 @@ import re
 import tensorflow as tf
 
 from model_pruning.python import pruning_utils
+from tensorflow.contrib import training as contrib_training
 from tensorflow.python.ops import variables  # pylint: disable=g-direct-tensorflow-import
 
 MASK_COLLECTION = 'masks'
@@ -251,7 +252,7 @@ def get_pruning_hparams():
     tf.HParams object initialized to default values
 
   """
-  return tf.contrib.training.HParams(
+  return contrib_training.HParams(
       name='model_pruning',
       begin_pruning_step=0,
       end_pruning_step=-1,
@@ -486,7 +487,7 @@ class Pruning(object):
     return tf.multiply(self._sparsity,
                        tf.div(target_sparsity[0], self._spec.target_sparsity))
 
-  def _update_mask(self, weights, threshold, gradients):
+  def _update_mask(self, weights, threshold, gradients):  # pylint: disable=unused-argument
     """Updates the mask for a given weight tensor.
 
     This functions first computes the cdf of the weight tensor, and estimates
@@ -530,20 +531,45 @@ class Pruning(object):
       k = tf.cast(
           tf.round(tf.cast(tf.size(abs_weights), tf.float32) * (1 - sparsity)),
           tf.int32)
+
+      # Generate a random shuffling of the weights s.t. the tie-breaker on
+      # weight magnitude is random uniform.
+      shuffling = tf.random_shuffle(
+          tf.range(tf.size(abs_weights)))
+      shuffling = tf.reshape(shuffling, [-1, 1])
+
+      # Flatten the weights and scatter the values randomly.
+      abs_weights = tf.reshape(abs_weights, [-1])
+      abs_weights = tf.scatter_nd(
+          shuffling,
+          abs_weights,
+          tf.shape(abs_weights))
+
       # Sort the entire array
-      values, _ = tf.nn.top_k(
-          tf.reshape(abs_weights, [-1]), k=tf.size(abs_weights))
-      # Grab the (k-1) th value
-      current_threshold = tf.gather(values, k - 1)
-      smoothed_threshold = tf.add_n([
-          tf.multiply(current_threshold, 1 - self._spec.threshold_decay),
-          tf.multiply(threshold, self._spec.threshold_decay)
-      ])
+      _, indices = tf.nn.top_k(abs_weights, k=tf.size(abs_weights))
 
-      new_mask = tf.cast(
-          tf.greater_equal(abs_weights, smoothed_threshold), tf.float32)
+      # `k` is how many non-zero weights we're going to have. Create a new
+      # mask where the first `k` elements are set to one and all others are
+      # set to zero.
+      mask_staging = tf.range(tf.size(abs_weights))
+      mask_staging = tf.cast(
+          tf.less(mask_staging, k),
+          tf.float32)
 
-    return smoothed_threshold, new_mask
+      # Scatter the mask back into the proper positions for the weight matrix.
+      indices = tf.reshape(indices, [-1, 1])
+      new_mask = tf.scatter_nd(
+          indices,
+          mask_staging,
+          tf.shape(mask_staging))
+
+      # Un-shuffle the newly created mask.
+      new_mask = tf.reshape(
+          tf.gather_nd(
+              new_mask,
+              shuffling),
+          tf.shape(weights))
+    return tf.constant(0, tf.float32), new_mask
 
   def _maybe_update_block_mask(self, weights, threshold, gradients=None):
     """Performs block-granular masking of the weights.
@@ -574,8 +600,9 @@ class Pruning(object):
     if squeezed_weights.get_shape().ndims != 2 or block_dims == [1, 1]:
       return self._update_mask(weights, threshold, gradients)
 
-    if self._spec.prune_option in ('first_order_gradient',
-                                   'second_order_gradient'):
+    if (self._spec.prune_option in ('first_order_gradient',
+                                    'second_order_gradient') and
+        gradients is None):
       raise ValueError(
           'Gradient based pruning implementation for block sparsity is not supported.'
       )
@@ -590,6 +617,8 @@ class Pruning(object):
 
     with tf.name_scope(weights.op.name + '_pruning_ops'):
       abs_weights = tf.abs(squeezed_weights)
+      if gradients is not None:
+        abs_gradients = tf.abs(tf.squeeze(gradients))
 
       pool_window = block_dims
       pool_fn = pruning_utils.factorized_pool
@@ -600,6 +629,11 @@ class Pruning(object):
             abs_weights,
             [1, abs_weights.get_shape()[0],
              abs_weights.get_shape()[1], 1])
+        if gradients is not None:
+          # Reshape gradients to be a rank 4 tensor of shape [1, .., .., 1].
+          abs_gradients = tf.reshape(
+              abs_gradients,
+              [1, gradients.get_shape()[0], gradients.get_shape()[1], 1])
         squeeze_axis = [0, 3]
 
       pooled_weights = pool_fn(
@@ -610,11 +644,26 @@ class Pruning(object):
           padding='SAME',
           name=weights.op.name + '_pooled')
 
+      if gradients is not None:
+        pooled_gradients = pool_fn(
+            abs_gradients,
+            window_shape=pool_window,
+            pooling_type=self._block_pooling_function,
+            strides=pool_window,
+            padding='SAME',
+            name=gradients.op.name + '_pooled')
+      else:
+        pooled_gradients = None
+
       if pooled_weights.get_shape().ndims != 2:
         pooled_weights = tf.squeeze(pooled_weights, axis=squeeze_axis)
 
+      if gradients is not None and pooled_gradients.get_shape().ndims != 2:
+        pooled_gradients = tf.squeeze(pooled_gradients, axis=squeeze_axis)
+
       smoothed_threshold, new_mask = self._update_mask(pooled_weights,
-                                                       threshold, gradients)
+                                                       threshold,
+                                                       pooled_gradients)
 
       updated_mask = pruning_utils.expand_tensor(new_mask, block_dims)
       sliced_mask = tf.slice(

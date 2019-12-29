@@ -16,7 +16,7 @@
 """Base class for models."""
 from __future__ import absolute_import
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 import tensorflow_probability as tfp
 tfd = tfp.distributions
 
@@ -250,11 +250,13 @@ class ProbabilisticModel(object):
     pass
 
 
-def get_independent_normal(data_dim):
+def get_independent_normal(data_dim, variance=1.0):
   """Returns an independent normal with event size the size of data_dim.
 
   Args:
     data_dim: List of data dimensions.
+    variance: A scalar that is used as the diagonal entries of the covariance
+      matrix.
 
   Returns:
     Independent normal distribution.
@@ -262,5 +264,5 @@ def get_independent_normal(data_dim):
   return tfd.Independent(
       tfd.Normal(
           loc=tf.zeros(data_dim, dtype=tf.float32),
-          scale=tf.ones(data_dim, dtype=tf.float32)),
+          scale=tf.ones(data_dim, dtype=tf.float32)*tf.math.sqrt(variance)),
       reinterpreted_batch_ndims=len(data_dim))

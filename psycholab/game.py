@@ -16,9 +16,11 @@
 """Creates grid social games from ASCII art diagrams."""
 
 from __future__ import print_function
-import collections
-import numpy as np
 
+import collections
+
+from gym import spaces
+import numpy as np
 
 # Careful with convention 'up' is displayed as -1 on the grid plot.
 MOVING_ACTIONS = {
@@ -168,10 +170,12 @@ class Game(object):
 
     num_items: number of items.
 
-    num_actions: number of actions.
+    num_actions: number of actions for each player.
 
     num_states: number of states (upper bound of the number
                 of combinations of players positions).
+
+    action_space: gym-like action space (a MultiDiscrete space).
   """
 
   def __init__(self, ascii_art, items, players, tabular=False, max_steps=100):
@@ -332,6 +336,10 @@ class Game(object):
     return len(self.actions)
 
   @property
+  def action_space(self):
+    return spaces.MultiDiscrete([self.num_actions] * self.num_players)
+
+  @property
   def num_states(self):
     # num_states is an upper bound of the number of possible
     # tuples containing each player's position.
@@ -347,7 +355,8 @@ class Game(object):
     """Applies a gym-based environement step.
 
     Args:
-      actions: list of integers containing the actions of each agent
+      actions: list of integers (or numpy array)
+      containing the actions of each agent.
 
     Returns:
       observations: image or list of integers, depending on the game setting.
@@ -483,7 +492,8 @@ class Game(object):
     only one -- randomly chosen -- does the move.
 
     Args:
-      actions: list of integers containing the actions of each agent.
+      actions: list of integers (or numpy array)
+      containing the actions of each agent
 
     Returns:
       actions: corrected list of actions.
@@ -648,20 +658,51 @@ class Game(object):
 
     return image
 
-  def obs2state(self, obs):
-    # For each player, obs contains its (x, y) positions.
-    s = 0
+  def discrete_state(self, obs):
+    """Converts an x,y position into a discrete state.
+
+    Args:
+      obs: list of discrete (x,y) positions of players.
+
+    Returns:
+      state: a unique discrete number associated with the list of positions.
+    """
+    state = 0
     for i, (x, y) in enumerate(obs):
-      s += (x * self.width + y) * ((self.width * self.height) ** i)
-    return s
+      state += (x * self.width + y) * ((self.width * self.height) ** i)
+    return state
+
+  def one_hot_state(self, obs):
+    """Converts an x,y position into a "one-hot" vector of size width + height.
+
+    Args:
+      obs: list of discrete (x,y) positions of players.
+
+    Returns:
+      state: numpy array of size (1, (width + height) * num_players).
+      The first 'width' elements encode the column for the first player.
+      They are all zeros except the x-th which is 1.
+      (similar for second part about encoding the row for the first player
+      and then for all other players).
+      This is not exaclty a one-hot encoding since multiple ones are
+      set (two by player).
+
+    Ex: in a 2-players 3x3 grid, obs = ((x1, y1), (x2, y2)) = ((2, 3), (1, 1))
+    one_hot_state(obs) = ((0,1,0 , 0,0,1 , 1,0,0 , 1,0,0))
+    """
+    state = np.zeros((1, (self.width + self.height) * self.num_players))
+    for i, (x, y) in enumerate(obs):
+      state[0, i * (self.width + self.height) + x - 1] = 1
+      state[0, i * (self.width + self.height) + self.width + y - 1] = 1
+    return state
 
   def generate_observations(self):
     if self.tabular:
-      state = []
+      obs = []
       for player in self.players_order:
         x, y = self.players_cells[player]
-        state.append((x, y))
-      return state
+        obs.append((x, y))
+      return obs
     else:
       return self.render()
 

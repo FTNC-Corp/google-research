@@ -128,7 +128,7 @@ def softranks(x, direction='ASCENDING', axis=-1, zero_based=True, **kwargs):
 
 
 def softquantiles(x, quantiles, quantile_width=None, axis=-1, **kwargs):
-  """Computes a (single) soft quantile via optimal transport.
+  """Computes soft quantiles via optimal transport.
 
   This operator takes advantage of the fact that an exhaustive softsort is not
   required to recover a single quantile. Instead, one can transport all
@@ -163,7 +163,6 @@ def softquantiles(x, quantiles, quantile_width=None, axis=-1, **kwargs):
     tf.errors.InvalidArgumentError when the quantiles and quantile width are not
     correct, namely quantiles are either not in sorted order or the
     quantile_width is too large.
-
   """
   if isinstance(quantiles, float):
     quantiles = [quantiles]
@@ -221,3 +220,37 @@ def softquantiles(x, quantiles, quantile_width=None, axis=-1, **kwargs):
     return tf.cond(tf.equal(tf.shape(result)[axis], 1),
                    lambda: tf.squeeze(result, axis=axis),
                    lambda: result)
+
+
+def soft_quantile_normalization(x, f, axis=-1, **kwargs):
+  """Applies a (soft) quantile normalization of x with f.
+
+  The usual quantile normalization operator uses the empirical values contained
+  in x to construct an empirical density function (EDF), assign to each value in
+  x its corresponding EDF (i.e. its rank divided by the size of x), and then
+  replace it with the corresponding quantiles described in vector f
+  (see https://en.wikipedia.org/wiki/Quantile_normalization).
+
+  The operator proposed here does so in a differentiable manner, by computing
+  first a distribution of ranks for x (stored in an optimal transport table) and
+  then take averages of those values stored in f.
+
+  Note that the current function only works when f is a vector of sorted values
+  corresponding to the quantiles of a distribution at levels [1/m ,..., m / m],
+  where m is the size of f.
+
+  Args:
+   x: Tensor<float> of any shape.
+   f: Tensor<float>[m] where m can be or not the size of x along the axis.
+    Usually it is. f should be sorted.
+   axis: the axis along which the tensor x should be quantile normalized.
+   **kwargs: extra parameters passed to the SoftQuantilizer.
+
+  Returns:
+   A tensor of the same shape of x.
+  """
+  z = _preprocess(x, axis)
+  sorter = soft_quantilizer.SoftQuantilizer(
+      z, descending=False, num_targets=f.shape[0], **kwargs)
+  y = 1.0 / sorter.weights * tf.linalg.matvec(sorter.transport, f)
+  return _postprocess(y, x.shape, axis)
